@@ -238,8 +238,8 @@
             const div = document.createElement('div');
             div.className = 'video-item';
             div.innerHTML = `
-                <video class="video-player" controls loop>
-                    <source src="${video.url}" type="video/mp4">
+                <video class="video-player" controls loop playsinline>
+                    <source src="${video.url}">
                     Your browser does not support the video tag.
                 </video>
                 <div class="video-info">
