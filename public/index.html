@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VideoFlow - Video Scrolling App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .upload-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .video-container {
+            margin-top: 80px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .video-item {
+            width: 100%;
+            max-width: 400px;
+            margin: 1rem 0;
+            border-radius: 15px;
+            overflow: hidden;
+            background: #1a1a1a;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .video-player {
+            width: 100%;
+            height: 600px;
+            object-fit: cover;
+            background: #000;
+        }
+
+        .video-info {
+            padding: 1rem;
+        }
+
+        .video-title {
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .video-author {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        .upload-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-form {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #ccc;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+            color: white;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .submit-btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: 500;
+        }
+
+        .close-btn {
+            background: #333;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 1rem;
+            width: 100%;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #888;
+        }
+
+        .error {
+            color: #ff6b6b;
+            text-align: center;
+            padding: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">VideoFlow</div>
+        <button class="upload-btn" onclick="openUploadModal()">Upload Video</button>
+    </div>
+
+    <div class="video-container" id="videoContainer">
+        <div class="loading">Loading videos...</div>
+    </div>
+
+    <div class="upload-modal" id="uploadModal">
+        <div class="upload-form">
+            <h2 style="margin-bottom: 1rem; text-align: center;">Upload Video</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="firstName">First Name</label>
+                    <input type="text" id="firstName" required>
+                </div>
+                <div class="form-group">
+                    <label for="lastName">Last Name</label>
+                    <input type="text" id="lastName" required>
+                </div>
+                <div class="form-group">
+                    <label for="title">Video Title</label>
+                    <input type="text" id="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="video">Video File</label>
+                    <input type="file" id="video" accept="video/*" required>
+                </div>
+                <button type="submit" class="submit-btn">Upload Video</button>
+            </form>
+            <button class="close-btn" onclick="closeUploadModal()">Cancel</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:4000' : '';
+        
+        // Load videos on page load
+        document.addEventListener('DOMContentLoaded', loadVideos);
+
+        async function loadVideos() {
+            try {
+                const response = await fetch(`${API_BASE}/api/videos`);
+                const videos = await response.json();
+                
+                const container = document.getElementById('videoContainer');
+                container.innerHTML = '';
+                
+                if (videos.length === 0) {
+                    container.innerHTML = '<div class="loading">No videos uploaded yet. Be the first!</div>';
+                    return;
+                }
+                
+                videos.forEach(video => {
+                    const videoElement = createVideoElement(video);
+                    container.appendChild(videoElement);
+                });
+            } catch (error) {
+                console.error('Error loading videos:', error);
+                document.getElementById('videoContainer').innerHTML = 
+                    '<div class="error">Error loading videos. Please try again.</div>';
+            }
+        }
+
+        function createVideoElement(video) {
+            const div = document.createElement('div');
+            div.className = 'video-item';
+            div.innerHTML = `
+                <video class="video-player" controls loop>
+                    <source src="${video.url}" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <div class="video-info">
+                    <div class="video-title">${video.title}</div>
+                    <div class="video-author">by ${video.author}</div>
+                </div>
+            `;
+            return div;
+        }
+
+        function openUploadModal() {
+            document.getElementById('uploadModal').style.display = 'flex';
+        }
+
+        function closeUploadModal() {
+            document.getElementById('uploadModal').style.display = 'none';
+            document.getElementById('uploadForm').reset();
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('video', document.getElementById('video').files[0]);
+            formData.append('title', document.getElementById('title').value);
+            formData.append('firstName', document.getElementById('firstName').value);
+            formData.append('lastName', document.getElementById('lastName').value);
+            formData.append('uploaderId', 'user-' + Math.random().toString(36).slice(2, 10));
+            
+            const submitBtn = e.target.querySelector('.submit-btn');
+            submitBtn.textContent = 'Uploading...';
+            submitBtn.disabled = true;
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    closeUploadModal();
+                    loadVideos(); // Reload videos
+                    alert('Video uploaded successfully!');
+                } else {
+                    const error = await response.json();
+                    alert('Upload failed: ' + error.error);
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Upload failed. Please try again.');
+            } finally {
+                submitBtn.textContent = 'Upload Video';
+                submitBtn.disabled = false;
+            }
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('uploadModal').addEventListener('click', (e) => {
+            if (e.target.id === 'uploadModal') {
+                closeUploadModal();
+            }
+        });
+    </script>
+</body>
+</html> 

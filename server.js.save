@@ -1,0 +1,67 @@
+// server.js
+const express = require('express');
+const multer = require('multer');
+const cors = require('cors');
+const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
+
+const app = express();
+const PORT = 4000;
+
+app.use(cors());
+app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+const upload = multer({ dest: 'uploads/' });
+
+const DB_FILE = 'videos.json';
+
+// Helper to read/write video metadata
+function readDB() {
+  if (!fs.existsSync(DB_FILE)) return [];
+  return JSON.parse(fs.readFileSync(DB_FILE));
+}
+function writeDB(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
+
+// List all videos
+app.get('/api/videos', (req, res) => {
+  res.json(readDB());
+});
+
+// Upload a video
+app.post('/api/upload', upload.single('video'), (req, res) => {
+  const { title, author, uploaderId } = req.body;
+  const id = uuidv4();
+  const ext = path.extname(req.file.originalname);
+  const newPath = `uploads/${id}${ext}`;
+  fs.renameSync(req.file.path, newPath);
+
+  const video = {
+    id,
+    title,
+    author,
+    url: `http://localhost:${PORT}/${newPath}`,
+    uploaderId,
+    uploadTime: new Date().toISOString()
+  };
+  const db = readDB();
+  db.unshift(video);
+  writeDB(db);
+  res.json(video);
+});
+
+// Delete a video (only by uploader)
+app.delete('/api/videos/:id', (req, res) => {
+  const { id } = req.params;
+  const { uploaderId } = req.body;
+  let db = readDB();
+  const video = db.find(v => v.id === id);
+  if (!video) return res.status(404).json({ error: 'Not found' });
+  if (video.uploaderId !== uploaderId) return res.status(403).json({ error: 'Forbidden' });
+
+  // Delete file
+  try { fs.unlinkSync(path.join(__dirname, 'uploads', path.basename(video.url))); } catch {}
+  db = db.filter(v => v.id
