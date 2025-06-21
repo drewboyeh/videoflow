@@ -1,26 +1,37 @@
 // server.js
-const USERS_FILE = 'users.json';
-
 const express = require('express');
 const multer = require('multer');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
-const path = require('path');;
+const path = require('path');
+
+// --- Persistent Storage Configuration ---
+// This makes your app work correctly on Railway by using a persistent Volume.
+// All user data (json files and video uploads) will be safe across restarts.
+const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname;
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const DB_FILE = path.join(DATA_DIR, 'videos.json');
+const COMMENTS_FILE = path.join(DATA_DIR, 'comments.json');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
+
+// Ensure the uploads directory exists, especially on the first run in a new volume
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+// --- End of Configuration ---
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve videos from the persistent uploads directory
+app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const upload = multer({ dest: 'uploads/' });
-
-const DB_FILE = 'videos.json';
-
-const COMMENTS_FILE = 'comments.json';
+// Set multer to use the persistent uploads directory
+const upload = multer({ dest: UPLOADS_DIR });
 
 // Helper to read/write users
 function readUsers() {
@@ -73,15 +84,20 @@ app.post('/api/upload', upload.single('video'), (req, res) => {
   const { title, firstName, lastName, uploaderId } = req.body;
   const id = uuidv4();
   const ext = path.extname(req.file.originalname);
-  const newPath = `uploads/${id}${ext}`;
-  fs.renameSync(req.file.path, newPath);
+  
+  // The final path for the video in our persistent volume
+  const finalPath = path.join(UPLOADS_DIR, `${id}${ext}`);
+  fs.renameSync(req.file.path, finalPath);
+
+  // Use a relative URL so it works on any domain, not just localhost
+  const videoUrl = `/uploads/${id}${ext}`;
 
   const author = `${firstName} ${lastName}`;
   const video = {
     id,
     title,
     author,
-    url: `http://localhost:${PORT}/${newPath}`,
+    url: videoUrl, // Use the new relative URL
     uploaderId,
     uploadTime: new Date().toISOString()
   };
@@ -109,8 +125,12 @@ app.delete('/api/videos/:id', (req, res) => {
   if (!video) return res.status(404).json({ error: 'Not found' });
   if (video.uploaderId !== uploaderId) return res.status(403).json({ error: 'Forbidden' });
 
-  // Delete file
-  try { fs.unlinkSync(path.join(__dirname, 'uploads', path.basename(video.url))); } catch {}
+  // Delete file from the persistent uploads directory
+  try { 
+    fs.unlinkSync(path.join(UPLOADS_DIR, path.basename(video.url))); 
+  } catch(err) {
+    console.error("Failed to delete video file:", err);
+  }
   db = db.filter(v => v.id !== id);
   writeDB(db);
   res.json({ success: true });
