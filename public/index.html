@@ -88,6 +88,56 @@
             font-size: 0.9rem;
         }
 
+        .comments-section {
+            padding: 1rem;
+            border-top: 1px solid #333;
+        }
+
+        .comments-container {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+
+        .comment {
+            margin-bottom: 0.75rem;
+        }
+
+        .comment-author {
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-right: 0.5rem;
+        }
+
+        .comment-text {
+            font-size: 0.9rem;
+            color: #ddd;
+        }
+        
+        .comment-form {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .comment-form input {
+            flex-grow: 1;
+            padding: 0.5rem;
+            border-radius: 20px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            color: white;
+        }
+
+        .comment-form button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
         .upload-modal {
             display: none;
             position: fixed;
@@ -237,6 +287,7 @@
         function createVideoElement(video) {
             const div = document.createElement('div');
             div.className = 'video-item';
+            div.dataset.videoId = video.id; // Store video ID for later
             div.innerHTML = `
                 <video class="video-player" controls loop playsinline>
                     <source src="${video.url}">
@@ -246,8 +297,82 @@
                     <div class="video-title">${video.title}</div>
                     <div class="video-author">by ${video.author}</div>
                 </div>
+                <div class="comments-section">
+                    <div class="comments-container" id="comments-for-${video.id}">
+                        <!-- Comments will be loaded here -->
+                    </div>
+                    <form class="comment-form" onsubmit="postComment(event)">
+                        <input type="text" name="commentText" placeholder="Add a comment..." required>
+                        <button type="submit">Post</button>
+                    </form>
+                </div>
             `;
+            // Load comments for this specific video
+            loadComments(video.id);
             return div;
+        }
+
+        async function loadComments(videoId) {
+            const container = document.getElementById(`comments-for-${videoId}`);
+            try {
+                const response = await fetch(`${API_BASE}/api/comments/${videoId}`);
+                const comments = await response.json();
+                
+                container.innerHTML = ''; // Clear previous comments
+                if (comments.length === 0) {
+                    container.innerHTML = '<div class="comment-text">No comments yet.</div>';
+                } else {
+                    comments.forEach(comment => {
+                        const commentDiv = document.createElement('div');
+                        commentDiv.className = 'comment';
+                        commentDiv.innerHTML = `
+                            <span class="comment-author">${comment.author}</span>
+                            <span class="comment-text">${comment.text}</span>
+                        `;
+                        container.appendChild(commentDiv);
+                    });
+                }
+            } catch (error) {
+                console.error(`Failed to load comments for video ${videoId}`, error);
+                container.innerHTML = '<div class="comment-text">Could not load comments.</div>';
+            }
+        }
+
+        async function postComment(event) {
+            event.preventDefault();
+            const form = event.target;
+            const videoItem = form.closest('.video-item');
+            const videoId = videoItem.dataset.videoId;
+            const commentText = form.elements.commentText.value;
+
+            // Simple user identification for now. In a real app, this would come from a login session.
+            const firstName = prompt("Please enter your first name:", "Guest");
+            if (!firstName) return; // User cancelled
+
+            const commenterId = 'user-' + Math.random().toString(36).slice(2, 10);
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/comments/${videoId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: commentText,
+                        firstName: firstName,
+                        lastName: 'User', // Simplified for now
+                        commenterId: commenterId
+                    })
+                });
+
+                if (response.ok) {
+                    form.reset();
+                    loadComments(videoId); // Refresh comments after posting
+                } else {
+                    alert('Failed to post comment.');
+                }
+            } catch (error) {
+                console.error('Error posting comment:', error);
+                alert('An error occurred while posting your comment.');
+            }
         }
 
         function openUploadModal() {
