@@ -40,7 +40,7 @@
             -webkit-text-fill-color: transparent;
         }
 
-        .upload-btn {
+        .upload-btn, .login-btn {
             background: linear-gradient(45deg, #667eea, #764ba2);
             color: white;
             border: none;
@@ -48,6 +48,28 @@
             border-radius: 20px;
             cursor: pointer;
             font-weight: 500;
+        }
+
+        .user-session {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logout-btn, .delete-btn {
+            background: #444;
+            color: #ccc;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .delete-btn {
+            background: #8d2a2a;
+            color: white;
+            margin-left: auto; /* Pushes button to the right */
         }
 
         .video-container {
@@ -138,7 +160,7 @@
             font-weight: 500;
         }
 
-        .upload-modal {
+        .upload-modal, .login-modal {
             display: none;
             position: fixed;
             top: 0;
@@ -151,7 +173,7 @@
             justify-content: center;
         }
 
-        .upload-form {
+        .upload-form, .login-form {
             background: #1a1a1a;
             padding: 2rem;
             border-radius: 15px;
@@ -221,7 +243,9 @@
 <body>
     <div class="header">
         <div class="logo">VideoFlow</div>
-        <button class="upload-btn" onclick="openUploadModal()">Upload Video</button>
+        <div class="user-session" id="userSession">
+            <!-- User state will be rendered here -->
+        </div>
     </div>
 
     <div class="video-container" id="videoContainer">
@@ -232,14 +256,6 @@
         <div class="upload-form">
             <h2 style="margin-bottom: 1rem; text-align: center;">Upload Video</h2>
             <form id="uploadForm">
-                <div class="form-group">
-                    <label for="firstName">First Name</label>
-                    <input type="text" id="firstName" required>
-                </div>
-                <div class="form-group">
-                    <label for="lastName">Last Name</label>
-                    <input type="text" id="lastName" required>
-                </div>
                 <div class="form-group">
                     <label for="title">Video Title</label>
                     <input type="text" id="title" required>
@@ -254,11 +270,66 @@
         </div>
     </div>
 
+    <div class="login-modal" id="loginModal">
+        <div class="login-form">
+            <h2 style="margin-bottom: 1rem; text-align: center;">Login or Sign Up</h2>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginFirstName">First Name</label>
+                    <input type="text" id="loginFirstName" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginLastName">Last Name</label>
+                    <input type="text" id="loginLastName" required>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" class="submit-btn" data-action="login">Login</button>
+                    <button type="submit" class="submit-btn" data-action="signup">Sign Up</button>
+                </div>
+            </form>
+            <button class="close-btn" onclick="closeLoginModal()">Cancel</button>
+        </div>
+    </div>
+
     <script>
         const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:4000' : '';
-        
-        // Load videos on page load
-        document.addEventListener('DOMContentLoaded', loadVideos);
+        let currentUser = null;
+
+        // Load videos and user session on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeUser();
+            loadVideos();
+        });
+
+        function initializeUser() {
+            const userData = localStorage.getItem('videoFlowUser');
+            if (userData) {
+                currentUser = JSON.parse(userData);
+            }
+            updateUserUI();
+        }
+
+        function updateUserUI() {
+            const sessionDiv = document.getElementById('userSession');
+            if (currentUser) {
+                sessionDiv.innerHTML = `
+                    <span>Welcome, ${currentUser.firstName}</span>
+                    <button class="upload-btn" onclick="openUploadModal()">Upload Video</button>
+                    <button class="logout-btn" onclick="logout()">Logout</button>
+                `;
+            } else {
+                sessionDiv.innerHTML = `
+                    <button class="login-btn" onclick="openLoginModal()">Login / Sign Up</button>
+                `;
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            localStorage.removeItem('videoFlowUser');
+            updateUserUI();
+            loadVideos(); // Reload videos to hide delete buttons
+        }
 
         async function loadVideos() {
             try {
@@ -287,7 +358,13 @@
         function createVideoElement(video) {
             const div = document.createElement('div');
             div.className = 'video-item';
-            div.dataset.videoId = video.id; // Store video ID for later
+            div.dataset.videoId = video.id;
+            
+            const canDelete = currentUser && currentUser.userId === video.uploaderId;
+            const deleteButton = canDelete 
+                ? `<button class="delete-btn" onclick="deleteVideo('${video.id}')">Delete</button>` 
+                : '';
+
             div.innerHTML = `
                 <video class="video-player" controls loop playsinline>
                     <source src="${video.url}">
@@ -295,7 +372,10 @@
                 </video>
                 <div class="video-info">
                     <div class="video-title">${video.title}</div>
-                    <div class="video-author">by ${video.author}</div>
+                    <div class="video-author" style="display: flex; align-items: center;">
+                        <span>by ${video.author}</span>
+                        ${deleteButton}
+                    </div>
                 </div>
                 <div class="comments-section">
                     <div class="comments-container" id="comments-for-${video.id}">
@@ -345,21 +425,21 @@
             const videoId = videoItem.dataset.videoId;
             const commentText = form.elements.commentText.value;
 
-            // Simple user identification for now. In a real app, this would come from a login session.
-            const firstName = prompt("Please enter your first name:", "Guest");
-            if (!firstName) return; // User cancelled
+            if (!currentUser) {
+                alert("Please log in to post a comment.");
+                openLoginModal();
+                return;
+            }
 
-            const commenterId = 'user-' + Math.random().toString(36).slice(2, 10);
-            
             try {
                 const response = await fetch(`${API_BASE}/api/comments/${videoId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         text: commentText,
-                        firstName: firstName,
-                        lastName: 'User', // Simplified for now
-                        commenterId: commenterId
+                        firstName: currentUser.firstName,
+                        lastName: currentUser.lastName,
+                        commenterId: currentUser.userId
                     })
                 });
 
@@ -376,6 +456,11 @@
         }
 
         function openUploadModal() {
+            if (!currentUser) {
+                alert("Please log in to upload a video.");
+                openLoginModal();
+                return;
+            }
             document.getElementById('uploadModal').style.display = 'flex';
         }
 
@@ -384,15 +469,28 @@
             document.getElementById('uploadForm').reset();
         }
 
+        function openLoginModal() {
+            document.getElementById('loginModal').style.display = 'flex';
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').style.display = 'none';
+        }
+
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            if (!currentUser) {
+                alert("Authentication error. Please log in again.");
+                return;
+            }
             
             const formData = new FormData();
             formData.append('video', document.getElementById('video').files[0]);
             formData.append('title', document.getElementById('title').value);
-            formData.append('firstName', document.getElementById('firstName').value);
-            formData.append('lastName', document.getElementById('lastName').value);
-            formData.append('uploaderId', 'user-' + Math.random().toString(36).slice(2, 10));
+            formData.append('firstName', currentUser.firstName);
+            formData.append('lastName', currentUser.lastName);
+            formData.append('uploaderId', currentUser.userId);
             
             const submitBtn = e.target.querySelector('.submit-btn');
             submitBtn.textContent = 'Uploading...';
@@ -421,12 +519,81 @@
             }
         });
 
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const action = e.submitter.dataset.action;
+            const firstName = document.getElementById('loginFirstName').value;
+            const lastName = document.getElementById('loginLastName').value;
+            const endpoint = action === 'signup' ? '/api/signup' : '/api/login';
+
+            try {
+                const response = await fetch(API_BASE + endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ firstName, lastName })
+                });
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    currentUser = { 
+                        userId: data.userId, 
+                        firstName: data.firstName, 
+                        lastName: data.lastName 
+                    };
+                    localStorage.setItem('videoFlowUser', JSON.stringify(currentUser));
+                    closeLoginModal();
+                    updateUserUI();
+                    loadVideos(); // Reload to show correct delete buttons
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                console.error('Login/Signup failed:', error);
+                alert('An error occurred. Please try again.');
+            }
+        });
+
         // Close modal when clicking outside
         document.getElementById('uploadModal').addEventListener('click', (e) => {
             if (e.target.id === 'uploadModal') {
                 closeUploadModal();
             }
         });
+
+        document.getElementById('loginModal').addEventListener('click', (e) => {
+            if (e.target.id === 'loginModal') {
+                closeLoginModal();
+            }
+        });
+
+        async function deleteVideo(videoId) {
+            if (!currentUser) {
+                alert("You must be logged in to delete videos.");
+                return;
+            }
+            if (!confirm("Are you sure you want to permanently delete this video?")) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/videos/${videoId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uploaderId: currentUser.userId })
+                });
+
+                if (response.ok) {
+                    alert('Video deleted successfully.');
+                    loadVideos(); // Refresh the video list
+                } else {
+                    const error = await response.json();
+                    alert(`Failed to delete video: ${error.error}`);
+                }
+            } catch (error) {
+                console.error('Error deleting video:', error);
+                alert('An error occurred while deleting the video.');
+            }
+        }
     </script>
 </body>
 </html> 
