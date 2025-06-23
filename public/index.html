@@ -238,6 +238,17 @@
             text-align: center;
             padding: 1rem;
         }
+
+        .account-btn {
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-right: 0.5rem;
+        }
     </style>
 </head>
 <body>
@@ -313,9 +324,8 @@
             const sessionDiv = document.getElementById('userSession');
             if (currentUser) {
                 sessionDiv.innerHTML = `
-                    <span>Welcome, ${currentUser.firstName}</span>
+                    <button class="account-btn" onclick="openAccountMenu()">${currentUser.firstName}</button>
                     <button class="upload-btn" onclick="openUploadModal()">Upload Video</button>
-                    <button class="logout-btn" onclick="logout()">Logout</button>
                 `;
             } else {
                 sessionDiv.innerHTML = `
@@ -592,6 +602,13 @@
             } catch (error) {
                 console.error('Error deleting video:', error);
                 alert('An error occurred while deleting the video.');
+            }
+        }
+
+        function openAccountMenu() {
+            // For now, just show a logout option
+            if (confirm("Log out of your account?")) {
+                logout();
             }
         }
     </script>
