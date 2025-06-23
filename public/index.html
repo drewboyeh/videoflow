@@ -28,7 +28,7 @@
             z-index: 1000;
             padding: 1rem;
             display: flex;
-            justify-content: space-between;
+            justify-content: flex-start;
             align-items: center;
         }
 
@@ -54,6 +54,7 @@
             display: flex;
             align-items: center;
             gap: 1rem;
+            margin-left: 1rem;
         }
 
         .logout-btn, .delete-btn {
@@ -371,6 +372,31 @@
             cursor: pointer;
             font-weight: 500;
         }
+        .hamburger-global {
+            position: fixed;
+            top: 1.2rem;
+            right: 1.5rem;
+            z-index: 2001;
+            width: 32px;
+            height: 32px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .hamburger-global span {
+            display: block;
+            width: 24px;
+            height: 3px;
+            background: #fff;
+            margin: 3px 0;
+            border-radius: 2px;
+        }
+        /* Remove hamburger from profile-header and profile-detail-header */
+        .profile-header .hamburger, .profile-detail-header .hamburger { display: none; }
     </style>
 </head>
 <body>
@@ -378,6 +404,9 @@
         <div class="logo">VideoFlow</div>
         <div class="user-session" id="userSession"></div>
     </div>
+    <button class="hamburger-global" onclick="openAccountMenu()">
+        <span></span><span></span><span></span>
+    </button>
 
     <div class="video-container" id="videoContainer">
         <div class="loading">Loading videos...</div>
@@ -387,22 +416,15 @@
         <div class="profile-header">
             <button class="back-btn" onclick="showMainFeed()">&lt; Back to Feed</button>
             <div style="flex:1"></div>
-            <button class="hamburger" onclick="openAccountMenu()">
-                <span></span><span></span><span></span>
-            </button>
         </div>
         <div class="profile-grid" id="profileVideosContainer">
             <div class="loading">Loading your videos...</div>
         </div>
     </div>
-
     <div id="profileDetailSection" class="profile-detail-section hidden">
         <div class="profile-detail-header">
             <button class="back-btn" onclick="closeProfileDetail()">&lt; Back to Grid</button>
             <div style="flex:1"></div>
-            <button class="hamburger" onclick="openAccountMenu()">
-                <span></span><span></span><span></span>
-            </button>
         </div>
         <div class="profile-detail-content" id="profileDetailContent"></div>
         <div class="profile-detail-nav" id="profileDetailNav"></div>
@@ -793,17 +815,32 @@
             div.className = 'profile-video-item';
             div.dataset.videoId = video.id;
             div.innerHTML = `
-                <video class="video-player" muted preload="metadata">
+                <video class="video-player" preload="metadata">
                     <source src="${video.url}">
                 </video>
                 <div class="profile-name-overlay">by ${video.author}</div>
             `;
-            // Hover to play preview
+            // Hover to play preview with audio
             const vid = div.querySelector('video');
-            div.addEventListener('mouseenter', () => { vid.currentTime = 0; vid.play(); });
-            div.addEventListener('mouseleave', () => { vid.pause(); vid.currentTime = 0; });
+            vid.loop = true;
+            vid.muted = false;
+            div.addEventListener('mouseenter', () => {
+                vid.currentTime = 0;
+                vid.muted = false;
+                vid.play();
+            });
+            div.addEventListener('mouseleave', () => {
+                vid.pause();
+                vid.currentTime = 0;
+                vid.muted = false;
+            });
             // Click to open detail view
-            div.addEventListener('click', () => openProfileDetail(idx, userVideos));
+            div.addEventListener('click', (e) => {
+                // Prevent click from firing if user is selecting text in overlay
+                if (e.target.classList.contains('profile-name-overlay')) return;
+                vid.pause();
+                openProfileDetail(idx, userVideos);
+            });
             return div;
         }
         // Profile detail/feed view
