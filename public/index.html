@@ -249,18 +249,88 @@
             font-weight: 500;
             margin-right: 0.5rem;
         }
+
+        .hidden { display: none !important; }
+        .profile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+        }
+        .hamburger {
+            width: 32px;
+            height: 32px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .hamburger span {
+            display: block;
+            width: 24px;
+            height: 3px;
+            background: #fff;
+            margin: 3px 0;
+            border-radius: 2px;
+        }
+        .back-btn {
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-bottom: 1rem;
+        }
+        .edit-title-form {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .edit-title-form input {
+            flex-grow: 1;
+            padding: 0.5rem;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            color: white;
+        }
+        .edit-title-form button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="logo">VideoFlow</div>
-        <div class="user-session" id="userSession">
-            <!-- User state will be rendered here -->
-        </div>
+        <div class="user-session" id="userSession"></div>
     </div>
 
     <div class="video-container" id="videoContainer">
         <div class="loading">Loading videos...</div>
+    </div>
+
+    <div id="profileSection" class="hidden">
+        <div class="profile-header">
+            <button class="back-btn" onclick="showMainFeed()">&lt; Back to Feed</button>
+            <div style="flex:1"></div>
+            <button class="hamburger" onclick="openAccountMenu()">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+        <div class="video-container" id="profileVideosContainer">
+            <div class="loading">Loading your videos...</div>
+        </div>
     </div>
 
     <div class="upload-modal" id="uploadModal">
@@ -324,7 +394,7 @@
             const sessionDiv = document.getElementById('userSession');
             if (currentUser) {
                 sessionDiv.innerHTML = `
-                    <button class="account-btn" onclick="openAccountMenu()">${currentUser.firstName}</button>
+                    <button class="account-btn" onclick="showProfile()">${currentUser.firstName}</button>
                     <button class="upload-btn" onclick="openUploadModal()">Upload Video</button>
                 `;
             } else {
@@ -605,10 +675,95 @@
             }
         }
 
+        function showProfile() {
+            document.getElementById('videoContainer').classList.add('hidden');
+            document.getElementById('profileSection').classList.remove('hidden');
+            loadProfileVideos();
+        }
+        function showMainFeed() {
+            document.getElementById('profileSection').classList.add('hidden');
+            document.getElementById('videoContainer').classList.remove('hidden');
+            loadVideos();
+        }
         function openAccountMenu() {
-            // For now, just show a logout option
+            // Hamburger menu for logout
             if (confirm("Log out of your account?")) {
                 logout();
+                showMainFeed();
+            }
+        }
+        async function loadProfileVideos() {
+            const container = document.getElementById('profileVideosContainer');
+            container.innerHTML = '<div class="loading">Loading your videos...</div>';
+            try {
+                const response = await fetch(`${API_BASE}/api/videos`);
+                const videos = await response.json();
+                const userVideos = videos.filter(v => currentUser && v.uploaderId === currentUser.userId);
+                container.innerHTML = '';
+                if (userVideos.length === 0) {
+                    container.innerHTML = '<div class="loading">You have not uploaded any videos yet.</div>';
+                    return;
+                }
+                userVideos.forEach(video => {
+                    const videoElement = createProfileVideoElement(video);
+                    container.appendChild(videoElement);
+                });
+            } catch (error) {
+                console.error('Error loading profile videos:', error);
+                container.innerHTML = '<div class="error">Error loading your videos. Please try again.</div>';
+            }
+        }
+        function createProfileVideoElement(video) {
+            const div = document.createElement('div');
+            div.className = 'video-item';
+            div.dataset.videoId = video.id;
+            div.innerHTML = `
+                <video class="video-player" controls loop playsinline>
+                    <source src="${video.url}">
+                    Your browser does not support the video tag.
+                </video>
+                <form class="edit-title-form" onsubmit="editVideoTitle(event, '${video.id}')">
+                    <input type="text" name="newTitle" value="${video.title}" required>
+                    <button type="submit">Save</button>
+                </form>
+                <div class="video-info">
+                    <div class="video-author" style="display: flex; align-items: center;">
+                        <span>by ${video.author}</span>
+                        <button class="delete-btn" onclick="deleteVideo('${video.id}')">Delete</button>
+                    </div>
+                </div>
+                <div class="comments-section">
+                    <div class="comments-container" id="comments-for-${video.id}"></div>
+                    <form class="comment-form" onsubmit="postComment(event)">
+                        <input type="text" name="commentText" placeholder="Add a comment..." required>
+                        <button type="submit">Post</button>
+                    </form>
+                </div>
+            `;
+            loadComments(video.id);
+            return div;
+        }
+        async function editVideoTitle(event, videoId) {
+            event.preventDefault();
+            const form = event.target;
+            const newTitle = form.elements.newTitle.value;
+            try {
+                // PATCH endpoint not implemented, so simulate by deleting and re-uploading metadata
+                const response = await fetch(`${API_BASE}/api/videos`);
+                const videos = await response.json();
+                const video = videos.find(v => v.id === videoId);
+                if (!video) return alert('Video not found.');
+                // Update title in DB
+                video.title = newTitle;
+                // Save all videos (simulate PATCH)
+                await fetch(`${API_BASE}/api/videos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(videos)
+                });
+                loadProfileVideos();
+            } catch (error) {
+                alert('Failed to update title.');
             }
         }
     </script>
