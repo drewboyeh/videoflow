@@ -312,35 +312,62 @@
             margin-bottom: 0.5rem;
             display: flex;
             flex-direction: column;
+            position: relative;
+            cursor: pointer;
         }
         .profile-video-item .video-player {
             height: 180px;
+            width: 100%;
+            object-fit: cover;
+            background: #000;
         }
-        .profile-video-controls {
-            padding: 0.5rem 1rem 1rem 1rem;
+        .profile-name-overlay {
+            position: absolute;
+            left: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            color: #fff;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.95rem;
+            border-bottom-left-radius: 15px;
+            border-top-right-radius: 10px;
+            pointer-events: none;
+        }
+        .profile-detail-section {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            width: 100vw;
+            background: #000;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 3000;
         }
-        .edit-title-form {
+        .profile-detail-header {
+            width: 100%;
             display: flex;
-            gap: 0.5rem;
-            margin-bottom: 0.5rem;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
         }
-        .edit-title-form input {
-            flex-grow: 1;
-            padding: 0.5rem;
-            border-radius: 8px;
-            border: 1px solid #444;
-            background: #2a2a2a;
-            color: white;
+        .profile-detail-content {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
         }
-        .edit-title-form button {
-            background: #667eea;
-            color: white;
+        .profile-detail-nav {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .profile-detail-nav button {
+            background: #333;
+            color: #fff;
             border: none;
             padding: 0.5rem 1rem;
-            border-radius: 8px;
+            border-radius: 20px;
             cursor: pointer;
             font-weight: 500;
         }
@@ -367,6 +394,18 @@
         <div class="profile-grid" id="profileVideosContainer">
             <div class="loading">Loading your videos...</div>
         </div>
+    </div>
+
+    <div id="profileDetailSection" class="profile-detail-section hidden">
+        <div class="profile-detail-header">
+            <button class="back-btn" onclick="closeProfileDetail()">&lt; Back to Grid</button>
+            <div style="flex:1"></div>
+            <button class="hamburger" onclick="openAccountMenu()">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+        <div class="profile-detail-content" id="profileDetailContent"></div>
+        <div class="profile-detail-nav" id="profileDetailNav"></div>
     </div>
 
     <div class="upload-modal" id="uploadModal">
@@ -740,8 +779,8 @@
                     container.innerHTML = '<div class="loading">You have not uploaded any videos yet.</div>';
                     return;
                 }
-                userVideos.forEach(video => {
-                    const videoElement = createProfileVideoElement(video);
+                userVideos.forEach((video, idx) => {
+                    const videoElement = createProfileGridVideoElement(video, idx, userVideos);
                     container.appendChild(videoElement);
                 });
             } catch (error) {
@@ -749,37 +788,81 @@
                 container.innerHTML = '<div class="error">Error loading your videos. Please try again.</div>';
             }
         }
-        function createProfileVideoElement(video) {
+        function createProfileGridVideoElement(video, idx, userVideos) {
             const div = document.createElement('div');
             div.className = 'profile-video-item';
             div.dataset.videoId = video.id;
             div.innerHTML = `
-                <video class="video-player" controls loop playsinline>
+                <video class="video-player" muted preload="metadata">
                     <source src="${video.url}">
-                    Your browser does not support the video tag.
                 </video>
-                <div class="profile-video-controls">
-                    <form class="edit-title-form" onsubmit="editVideoTitle(event, '${video.id}')">
-                        <input type="text" name="newTitle" value="${video.title}" required>
-                        <button type="submit">Save</button>
+                <div class="profile-name-overlay">by ${video.author}</div>
+            `;
+            // Hover to play preview
+            const vid = div.querySelector('video');
+            div.addEventListener('mouseenter', () => { vid.currentTime = 0; vid.play(); });
+            div.addEventListener('mouseleave', () => { vid.pause(); vid.currentTime = 0; });
+            // Click to open detail view
+            div.addEventListener('click', () => openProfileDetail(idx, userVideos));
+            return div;
+        }
+        // Profile detail/feed view
+        let profileDetailVideos = [];
+        let profileDetailIndex = 0;
+        function openProfileDetail(idx, videos) {
+            profileDetailVideos = videos;
+            profileDetailIndex = idx;
+            document.getElementById('profileSection').classList.add('hidden');
+            document.getElementById('profileDetailSection').classList.remove('hidden');
+            renderProfileDetail();
+        }
+        function closeProfileDetail() {
+            document.getElementById('profileDetailSection').classList.add('hidden');
+            document.getElementById('profileSection').classList.remove('hidden');
+        }
+        function renderProfileDetail() {
+            const video = profileDetailVideos[profileDetailIndex];
+            const content = document.getElementById('profileDetailContent');
+            content.innerHTML = `
+                <video class="video-player" controls loop playsinline style="width:100%;height:400px;object-fit:cover;">
+                    <source src="${video.url}">
+                </video>
+                <form class="edit-title-form" onsubmit="editVideoTitle(event, '${video.id}', true)">
+                    <input type="text" name="newTitle" value="${video.title}" required>
+                    <button type="submit">Save</button>
+                </form>
+                <div class="video-author" style="display: flex; align-items: center;">
+                    <span>by ${video.author}</span>
+                    <button class="delete-btn" onclick="deleteVideo('${video.id}')">Delete</button>
+                </div>
+                <div class="comments-section">
+                    <div class="comments-container" id="comments-for-${video.id}"></div>
+                    <form class="comment-form" onsubmit="postComment(event)">
+                        <input type="text" name="commentText" placeholder="Add a comment..." required>
+                        <button type="submit">Post</button>
                     </form>
-                    <div class="video-author" style="display: flex; align-items: center;">
-                        <span>by ${video.author}</span>
-                        <button class="delete-btn" onclick="deleteVideo('${video.id}')">Delete</button>
-                    </div>
-                    <div class="comments-section">
-                        <div class="comments-container" id="comments-for-${video.id}"></div>
-                        <form class="comment-form" onsubmit="postComment(event)">
-                            <input type="text" name="commentText" placeholder="Add a comment..." required>
-                            <button type="submit">Post</button>
-                        </form>
-                    </div>
                 </div>
             `;
             loadComments(video.id);
-            return div;
+            // Navigation
+            const nav = document.getElementById('profileDetailNav');
+            nav.innerHTML = '';
+            if (profileDetailVideos.length > 1) {
+                if (profileDetailIndex > 0) {
+                    const prevBtn = document.createElement('button');
+                    prevBtn.textContent = 'Previous';
+                    prevBtn.onclick = () => { profileDetailIndex--; renderProfileDetail(); };
+                    nav.appendChild(prevBtn);
+                }
+                if (profileDetailIndex < profileDetailVideos.length - 1) {
+                    const nextBtn = document.createElement('button');
+                    nextBtn.textContent = 'Next';
+                    nextBtn.onclick = () => { profileDetailIndex++; renderProfileDetail(); };
+                    nav.appendChild(nextBtn);
+                }
+            }
         }
-        async function editVideoTitle(event, videoId) {
+        async function editVideoTitle(event, videoId, isDetail) {
             event.preventDefault();
             const form = event.target;
             const newTitle = form.elements.newTitle.value;
@@ -797,7 +880,8 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(videos)
                 });
-                loadProfileVideos();
+                if (isDetail) renderProfileDetail();
+                else loadProfileVideos();
             } catch (error) {
                 alert('Failed to update title.');
             }
