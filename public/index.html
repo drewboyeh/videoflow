@@ -286,6 +286,42 @@
             font-weight: 500;
             margin-bottom: 1rem;
         }
+        .profile-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1.5rem 1rem;
+            width: 100%;
+            justify-items: center;
+        }
+        @media (max-width: 1200px) {
+            .profile-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        @media (max-width: 900px) {
+            .profile-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .profile-grid { grid-template-columns: 1fr; }
+        }
+        .profile-video-item {
+            width: 100%;
+            max-width: 220px;
+            background: #1a1a1a;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 0.5rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .profile-video-item .video-player {
+            height: 180px;
+        }
+        .profile-video-controls {
+            padding: 0.5rem 1rem 1rem 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
         .edit-title-form {
             display: flex;
             gap: 0.5rem;
@@ -328,7 +364,7 @@
                 <span></span><span></span><span></span>
             </button>
         </div>
-        <div class="video-container" id="profileVideosContainer">
+        <div class="profile-grid" id="profileVideosContainer">
             <div class="loading">Loading your videos...</div>
         </div>
     </div>
@@ -715,29 +751,29 @@
         }
         function createProfileVideoElement(video) {
             const div = document.createElement('div');
-            div.className = 'video-item';
+            div.className = 'profile-video-item';
             div.dataset.videoId = video.id;
             div.innerHTML = `
                 <video class="video-player" controls loop playsinline>
                     <source src="${video.url}">
                     Your browser does not support the video tag.
                 </video>
-                <form class="edit-title-form" onsubmit="editVideoTitle(event, '${video.id}')">
-                    <input type="text" name="newTitle" value="${video.title}" required>
-                    <button type="submit">Save</button>
-                </form>
-                <div class="video-info">
+                <div class="profile-video-controls">
+                    <form class="edit-title-form" onsubmit="editVideoTitle(event, '${video.id}')">
+                        <input type="text" name="newTitle" value="${video.title}" required>
+                        <button type="submit">Save</button>
+                    </form>
                     <div class="video-author" style="display: flex; align-items: center;">
                         <span>by ${video.author}</span>
                         <button class="delete-btn" onclick="deleteVideo('${video.id}')">Delete</button>
                     </div>
-                </div>
-                <div class="comments-section">
-                    <div class="comments-container" id="comments-for-${video.id}"></div>
-                    <form class="comment-form" onsubmit="postComment(event)">
-                        <input type="text" name="commentText" placeholder="Add a comment..." required>
-                        <button type="submit">Post</button>
-                    </form>
+                    <div class="comments-section">
+                        <div class="comments-container" id="comments-for-${video.id}"></div>
+                        <form class="comment-form" onsubmit="postComment(event)">
+                            <input type="text" name="commentText" placeholder="Add a comment..." required>
+                            <button type="submit">Post</button>
+                        </form>
+                    </div>
                 </div>
             `;
             loadComments(video.id);
